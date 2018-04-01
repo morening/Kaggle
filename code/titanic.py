@@ -1,271 +1,357 @@
-#-*-coding:utf-8-*-
-# @Time    : 2018/3/28 下午8:42
-# @Author  : morening
-# @File    : titanic.py
-# @Software: PyCharm
-
-
-# train.csv： Age缺失少量数据（714/891）；Cabin缺失较大（204/891）
-# test.csv: Age缺失数据相对少些（332/418）；Cabin缺失较大（91/418）
-# 针对上述情况：补全Age数据；忽略Cabin数据
-# PassengerId 和 Name 无关特征，故忽略
-
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import warnings
-
 warnings.filterwarnings("ignore")
 
+import pandas as pd
 
-def load_df(path):
-    df = pd.read_csv(path)
-    return df
+path_train = '../data/titanic/train.csv'
+df_train = pd.read_csv(path_train)
+path_test = '../data/titanic/test.csv'
+df_test = pd.read_csv(path_test)
+PassengerId = [id for id in df_test.PassengerId]
+df_all = pd.concat([df_train, df_test], ignore_index=True)
+df_train_copy = df_train.copy()
 
-
-def plot_df(df):
-    plt.subplot2grid((2, 3), (0, 0))
-    df.Survived.value_counts().plot(kind='bar')
-    plt.title("Survived Distribution")
-    plt.ylabel("Number")
-
-    plt.subplot2grid((2, 3), (0, 1))
-    df.Pclass.value_counts().plot(kind='bar')
-    plt.title("Class Distribution")
-    plt.ylabel("Number")
-
-    plt.subplot2grid((2, 3), (0, 2))
-    plt.scatter(df.Survived, df.Age)
-    plt.title("Age Distribution")
-    plt.ylabel("Age")
-    plt.grid(b=True, which='major', axis='y')
-
-    plt.subplot2grid((2, 3), (1, 0), colspan=2)
-    df.Age[df.Pclass == 1].plot(kind='kde')
-    df.Age[df.Pclass == 2].plot(kind='kde')
-    df.Age[df.Pclass == 3].plot(kind='kde')
-    plt.xlabel("Age")
-    plt.ylabel("Density")
-    plt.title("Class and Age Distribution")
-    plt.legend(('First', 'Second', 'Third'), loc='best')
-
-    plt.subplot2grid((2, 3), (1, 2))
-    df.Embarked.value_counts().plot(kind='bar')
-    plt.title("Embarked Distribution")
-    plt.ylabel("Number")
-
-    plt.show()
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
-def plot_df_Class(df):
-    survived = df.Pclass[df.Survived == 1].value_counts()
-    unsurvived = df.Pclass[df.Survived == 0].value_counts()
-    dfp = pd.DataFrame({'Survived': survived, 'unSurvived': unsurvived})
-    dfp.plot(kind='bar', stacked=True)
-    plt.title("Class and Survived Status")
-    plt.xlabel("Class")
-    plt.ylabel("Number")
-    plt.show()
+# sns.barplot(x='Pclass', y='Survived', data=df_train, palette='Set3')
+# plt.show()
+# 高等级生存率高于低等级
+
+# sns.barplot(x='Sex', y='Survived', data=df_train, palette='Set3')
+# plt.show()
+# 女性生存率高于男性
+
+# sns.barplot(x='SibSp', y='Survived', data=df_train, palette='Set3')
+# plt.show()
+# 兄弟姐妹数量适中生存率较高 1&2 > 0&3&4 > 5&8
+def get_sibsp_type(num):
+    if num == 1 or num == 2:
+        return 'high'
+    elif num == 0 or num == 3 or num == 4:
+        return 'mid'
+    else:
+        return 'low'
+df_all['SibSpType'] = df_all['SibSp'].apply(get_sibsp_type)
+
+# sns.barplot(x='Parch', y='Survived', data=df_train, palette='Set3')
+# plt.show()
+# 父母与子女数量适中生存率较高 1&2&3 > 0&5 > 4&6
+def get_parch_type(num):
+    if num >= 1 and num <= 3:
+        return 'high'
+    elif num == 0 or num == 5:
+        return 'mid'
+    else:
+        return 'low'
+df_all['ParchType'] = df_all['Parch'].apply(get_parch_type)
+
+# facet = sns.FacetGrid(df_train, hue='Survived', aspect=2)
+# facet.map(sns.kdeplot, 'Age', shade=True)
+# facet.set(xlim=(0, df_train['Age'].max()))
+# facet.add_legend()
+# plt.show()
+# 儿童生存率大于成年人
+
+# facet = sns.FacetGrid(df_train, hue='Survived', aspect=2)
+# facet.map(sns.kdeplot, 'Fare', shade=True)
+# facet.set(xlim=(0, df_train['Fare'].max()))
+# facet.add_legend()
+# plt.show()
+# 票价越高，生存率越高
 
 
-def plot_df_Sex(df):
-    survived = df.Sex[df.Survived == 1].value_counts()
-    unsurvived = df.Sex[df.Survived == 0].value_counts()
-    dfp = pd.DataFrame({'Survived': survived, 'unSurvived': unsurvived})
-    dfp.plot(kind='bar', stacked=True)
-    plt.title("Sex and Survived Status")
-    plt.xlabel("Sex")
-    plt.ylabel("Number")
-    plt.show()
+# sns.barplot(x='Embarked', y='Survived', data=df_train, palette='Set3')
+# plt.show()
+# 登船城市C的生存率大于其他
+
+def get_title(name):
+    return name.split(', ')[1].split('. ')[0]
+df_all['Title'] = df_all['Name'].apply(get_title)
+Title_Dict = {}
+Title_Dict.update(dict.fromkeys(['Capt', 'Col', 'Major', 'Dr', 'Rev'], 'Officer'))
+Title_Dict.update(dict.fromkeys(['Don', 'Sir', 'the Countess', 'Dona', 'Lady'], 'Royalty'))
+Title_Dict.update(dict.fromkeys(['Mme', 'Ms', 'Mrs'], 'Mrs'))
+Title_Dict.update(dict.fromkeys(['Mlle', 'Miss'], 'Miss'))
+Title_Dict.update(dict.fromkeys(['Mr'], 'Mr'))
+Title_Dict.update(dict.fromkeys(['Master', 'Jonkheer'], 'Master'))
+df_all['Title'] = df_all['Title'].map(Title_Dict)
+# sns.barplot(x='Title', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+# 不同的称谓也会影响生存率
+
+df_all['FamiliySize'] = df_all['SibSp'] + df_all['Parch'] + 1
+# sns.barplot(x='FamiliySize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+# 家庭规模适中生存率大于其他 2&3&4 > 1&5&6&7 > 8&11
+def get_family_type(num):
+    if num >= 2 and num <= 4:
+        return 'high'
+    elif num == 1 or (num >= 5 and num <= 7):
+        return 'mid'
+    else:
+        return 'low'
+df_all['FamiliyType'] = df_all['FamiliySize'].apply(get_family_type)
+
+def get_deck(cabin):
+    return str(cabin)[0]
+df_all['Cabin'].fillna('U', inplace=True)
+df_all['Deck'] = df_all['Cabin'].apply(get_deck)
+
+# sns.barplot(x='Deck', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+# 船舱所在位置对生存率影响较大
+
+ticket_group_counts = df_all['Ticket'].value_counts()
+df_all['TicketGroupSize'] = df_all['Ticket'].apply(lambda ticket: ticket_group_counts[ticket])
+# sns.barplot(x='TicketGroupSize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+# 适中的同号船票数量生存率比其他高 2&3&4 > 1&7 > 5&6
+def get_ticket_group_type(num):
+    if num >=2 and num <= 4:
+        return 'high'
+    elif num == 1 or num == 7:
+        return 'mid'
+    else:
+        return 'low'
+df_all['TicketGroupType'] = df_all['TicketGroupSize'].apply(get_ticket_group_type)
 
 
-def plot_df_Sex_Class(df):
-    fig = plt.figure()
-    plt.title("Sex/Class and Survived Status")
 
-    ax1 = fig.add_subplot(141)
-    df.Survived[df.Sex == 'female'][df.Pclass != 3].value_counts().plot(kind='bar',
-                                                                        label='female with first/second class')
-    ax1.legend(['female with first/second class'], loc='best')
+# print(df_train[df_train['Embarked'] == 'C'][df_train['Pclass'] == 1].median())
+# print(df_train[df_train['Embarked'].isnull()])
+# Embarked 缺失的数据更接近于C
+df_all['Embarked'].fillna('C', inplace=True)
+# print(df_all[df_all['Embarked'] == 'S'][df_all['Pclass'] == 3].median())
+# print(df_all[df_all['Fare'].isnull()])
+df_all['Fare'].fillna(8.05, inplace=True)
+def get_fare_type(fare):
+    if fare <= 18:
+        return 'low'
+    else:
+        return 'high'
+df_all['FareType'] = df_all['Fare'].apply(get_fare_type)
 
-    ax2 = fig.add_subplot(142)
-    df.Survived[df.Sex == 'female'][df.Pclass == 3].value_counts().plot(kind='bar', label='female with third class')
-    ax2.legend(['female with third class'], loc='best')
+features_age = ['Age', 'Pclass', 'Sex', 'Title']
+df_age = df_all[features_age]
+df_age = pd.get_dummies(df_age)
+known_age = df_age[df_age['Age'].notnull()].as_matrix()
+unknown_age = df_age[df_age['Age'].isnull()].as_matrix()
+from sklearn.ensemble import RandomForestRegressor
+rfr = RandomForestRegressor(random_state=0, n_estimators=100)
+rfr.fit(X=known_age[:, 1:], y=known_age[:, 0])
+predicted_age = rfr.predict(unknown_age[:, 1:])
+df_all.loc[(df_all['Age'].isnull()), 'Age'] = predicted_age
+def get_age_type(age):
+    if age <= 15:
+        return 'child'
+    elif age <= 50:
+        return 'adult'
+    else:
+        return 'old'
+df_all['AgeType'] = df_all['Age'].apply(get_age_type)
 
-    ax3 = fig.add_subplot(143)
-    df.Survived[df.Sex == 'male'][df.Pclass != 3].value_counts().plot(kind='bar', label='male with first/second class')
-    ax3.legend(['male with first/second class'], loc='best')
-
-    ax4 = fig.add_subplot(144)
-    df.Survived[df.Sex == 'male'][df.Pclass == 3].value_counts().plot(kind='bar', label='male with third class')
-    ax4.legend(['male with third class'], loc='best')
-
-    plt.show()
-
-
-def plot_df_Embarked_Class(df):
-    first = df.Embarked[df.Pclass == 1].value_counts()
-    sencond = df.Embarked[df.Pclass == 2].value_counts()
-    third = df.Embarked[df.Pclass == 3].value_counts()
-    dfp = pd.DataFrame({'first': first, 'sencond': sencond, 'third': third})
-    dfp.plot(kind='bar', stacked=True)
-    plt.title("Embarked and Class Status")
-    plt.xlabel("Embarked")
-    plt.ylabel("Number")
-    plt.show()
-
-
-def plot_df_Embarked(df):
-    Survived = df.Embarked[df.Survived == 1].value_counts()
-    Unsurvived = df.Embarked[df.Survived == 0].value_counts()
-    dfp = pd.DataFrame({'Survived': Survived, 'Unsurvived': Unsurvived})
-    dfp.plot(kind='bar', stacked=True)
-    plt.title("Embarked and Survived Status")
-    plt.xlabel("Embarked")
-    plt.ylabel("Number")
-    plt.show()
+# df_all['Surname'] = df_all['Name'].apply(lambda name:name.split(',')[0].strip())
+# surname_group_counts = df_all['Surname'].value_counts()
+# df_all['SurnameGroupSize'] = df_all['Surname'].apply(lambda surname:surname_group_counts[surname])
+# sns.barplot(x='SurnameGroupSize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+# surname group size不同，生存率也不同
 
 
-def print_df_sibSp_parch(df):
-    g = df.groupby(['SibSp', 'Survived'])
-    dfp = pd.DataFrame(g.count()['PassengerId'])
-    print(dfp)
+features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'FamiliyType', 'Deck',
+            'TicketGroupType']
+df_train = df_all[features][df_all['Survived'].notnull()]
+df_test = df_all[features][df_all['Survived'].isnull()].drop('Survived', axis=1)
+df_train = pd.get_dummies(df_train)
+df_test = pd.get_dummies(df_test)
+import numpy as np
+df_test.insert(27, 'Deck_T', pd.DataFrame([np.nan]))
+df_test['Deck_T'].fillna(0, inplace=True)
+X_train = df_train.as_matrix()[:, 1:]
+y_train = df_train.as_matrix()[:, 0]
+X_test = df_test.as_matrix()
+# print(X_train.shape, y_train.shape, X_test.shape)
 
-    g = df.groupby(['Parch', 'Survived'])
-    dfp = pd.DataFrame(g.count()['PassengerId'])
-    print(dfp)
+from sklearn.pipeline import Pipeline
+from sklearn.feature_selection import SelectKBest
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import BaggingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import SGDClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import VotingClassifier
+from sklearn.neighbors import KNeighborsClassifier
 
+# {'classify__max_depth': 9, 'classify__n_estimators': 38, 'select__k': 16} 0.881563393193
+# pipe = Pipeline([('select', SelectKBest()), ('classify', RandomForestClassifier(random_state=1, max_features='sqrt'))])
+# param_search = {'select__k':list(range(2, 24, 2)), 'classify__n_estimators':list(range(20, 50, 2)), 'classify__max_depth':list(range(3, 60, 3))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
 
-def print_df_Cabin(df):
-    print(df.Cabin.value_counts())
+# skb = SelectKBest(k=16)
+# rfc = RandomForestClassifier(max_depth=9, n_estimators=38)
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, rfc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print(accuracy_score(y_train, predicted_train))
+# print(df_train_copy[df_train_copy['Survived'] != predicted_train])
 
+# {'classify__learning_rate': 0.1, 'classify__max_depth': 3, 'classify__n_estimators': 50, 'select__k': 16} 0.881036534602
+# pipe = Pipeline([('select', SelectKBest()), ('classify', GradientBoostingClassifier(random_state=1))])
+# param_search = {'select__k':list(range(2, 24, 2)), 'classify__n_estimators':list(range(20, 200, 30)), 'classify__learning_rate':[10**rate for rate in range(-3, 3)], 'classify__max_depth':list(range(3, 30, 3))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
 
-def plot_df_Cabin_noCabin_Class(df):
-    cabin = df.Pclass[pd.notnull(df.Cabin)].value_counts()
-    no_cabin = df.Pclass[pd.isnull(df.Cabin)].value_counts()
-    dfp = pd.DataFrame({'cabin': cabin, 'no_cabin': no_cabin})
-    dfp.plot(kind='bar', stacked=True)
-    plt.show()
-
-
-def plot_df_Age_noAge_Class(df):
-    age = df.Pclass[pd.notnull(df.Age)].value_counts()
-    no_age = df.Pclass[pd.isnull(df.Age)].value_counts()
-    dfp = pd.DataFrame({'age': age, 'no_age': no_age})
-    dfp.plot(kind='bar', stacked=True)
-    plt.show()
-
-
-def plot_df_Mr_Mrs_Miss_Survived(df):
-    Mr = df.Survived[df.Name.str.contains('Mr.')].value_counts()
-    Mrs = df.Survived[df.Name.str.contains('Mrs.')].value_counts()
-    Miss = df.Survived[df.Name.str.contains('Miss.')].value_counts()
-    dfp = pd.DataFrame({'Mr': Mr, 'Mrs': Mrs, 'Miss': Miss})
-    dfp.plot(kind='bar', stacked=True)
-    plt.show()
-
-
-def plot_df_Fare_Survived(df):
-    Survived = df.Fare[df.Survived == 1].value_counts()
-    unSurvived = df.Fare[df.Survived == 0].value_counts()
-    dfp = pd.DataFrame({'Survived': Survived, 'unSurvived': unSurvived})
-    dfp.plot(kind='bar', stacked=True)
-    plt.show()
-    pass
-
-
-def fix_datas(df):
-    df.drop(['PassengerId', 'SibSp', 'Parch', 'Ticket', 'Cabin', 'Embarked', 'Fare'], axis=1, inplace=True)
-
-    from sklearn.preprocessing import LabelBinarizer
-    new_sex = LabelBinarizer().fit_transform(df.Sex)
-    df.drop(['Sex'], axis=1, inplace=True)
-    df.insert(0, 'Sex', pd.DataFrame(new_sex))
-
-    title_list = list()
-    for name in df.Name:
-        title_list.append(name.split(', ')[1].split('. ')[0])
-    df.insert(0, 'Title', pd.DataFrame(title_list))
-    df.drop(['Name'], axis=1, inplace=True)
-
-    title_dict = {}
-    count = 0
-    for title in df.Title:
-        if title not in title_dict:
-            title_dict[title] = count
-            count += 1
-
-    title_vect = []
-    for title in df.Title:
-        title_vect.append(title_dict[title])
-    df.drop(['Title'], axis=1, inplace=True)
-    df.insert(0, 'Title', pd.DataFrame(title_vect))
-
-    child_list = list()
-    for age in df.Age:
-        if np.isnan(age):
-            child_list.append(np.nan)
-        elif age > 50:
-            child_list.append(2)
-        elif age > 15:
-            child_list.append(1)
-        else:
-            child_list.append(0)
-    df.insert(0, 'Adult', pd.DataFrame(child_list))
-    df.drop(['Age'], axis=1, inplace=True)
-
-    X_train = [[df['Title'][index], df['Sex'][index]] for index in range(df.shape[0]) if
-               np.isnan(df['Adult'][index]) == False]
-    y_train = [[df['Adult'][index]] for index in range(df.shape[0]) if np.isnan(df['Adult'][index]) == False]
-    from sklearn.naive_bayes import GaussianNB
-    gnb = GaussianNB()
-    gnb.fit(X_train, y_train)
-    for index in range(df.shape[0]):
-        if np.isnan(df['Adult'][index]):
-            df['Adult'][index] = gnb.predict([[df['Title'][index], df['Sex'][index]]])
-
-    df.drop(['Title'], axis=1, inplace=True)
-
-    return df
+# skb = SelectKBest(k=16)
+# gbc = GradientBoostingClassifier(max_depth=3, n_estimators=50, learning_rate=0.1, random_state=1)
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, gbc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
 
 
-def predict(train_df, test_df):
-    from sklearn.svm import SVC
-    svc = SVC()
-    svc.fit([[train_df['Adult'][index], train_df['Sex'][index], train_df['Pclass'][index]] for index in
-             range(train_df.shape[0])], [train_df['Survived'][index] for index in range(train_df.shape[0])])
-    return svc.predict([[test_df['Adult'][index], test_df['Sex'][index], test_df['Pclass'][index]] for index in
-                        range(test_df.shape[0])])
+# {'classify__max_depth': 5, 'classify__min_samples_leaf': 2, 'classify__min_samples_split': 2, 'select__k': 14} 0.882011672812
+# pipe = Pipeline([('select', SelectKBest()), ('classify', DecisionTreeClassifier(random_state=1))])
+# param_search = {'select__k':list(range(2, 32, 2)), 'classify__max_depth':list(range(1, 10, 1)), 'classify__min_samples_split':list(range(2, 10, 1)), 'classify__min_samples_leaf':list(range(1, 5, 1))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
+
+# skb = SelectKBest(k=14)
+# dtc = DecisionTreeClassifier(max_depth=5, min_samples_leaf=2, min_samples_split=2, random_state=1)
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, dtc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
 
 
-train_path = '../data/titanic/train.csv'
-train_df = load_df(train_path)
-# PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
-# plot_df(train_df)
-# plot_df_Class(train_df) #高等舱获救率高于低等舱
-# plot_df_Sex(train_df) #女性获救率高于男性
-# plot_df_Sex_Class(train_df) #男性/女性高等舱获取率高于男性/女性低等舱
-# plot_df_Embarked_Class(train_df) #规律不明显
-# plot_df_Embarked(train_df) #规律不明显
-# print_df_sibSp_parch(train_df) #规律不明显
-# print_df_Cabin(train_df)
-# plot_df_Cabin_noCabin_Class(train_df) #一等舱记录比二、三等舱Cabin记录更完整
-# plot_df_Age_noAge_Class(train_df) #高等舱Age记录更完整
-# plot_df_Mr_Mrs_Miss_Survived(train_df) #Mrs可能为已婚，有孩子，可能会影响结果
-# plot_df_Fare_Survived(train_df)
+# {'classify__learning_rate': 1.5, 'classify__n_estimators': 90, 'select__k': 20} 0.86143874843
+# pipe = Pipeline([('select', SelectKBest()), ('classify', AdaBoostClassifier(base_estimator=DecisionTreeClassifier(random_state=1), random_state=1))])
+# param_search = {'select__k':list(range(2, 24, 2)), 'classify__n_estimators':list(range(10, 100, 10)), 'classify__learning_rate':list(np.arange(0.5, 5.0, 0.5))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
 
-# 综合上述分析，提取特征 Survived Pclass Sex Age(Adult/Adult) Fare
-fixed_train_df = fix_datas(train_df)
-test_path = '../data/titanic/test.csv'
-test_df = load_df(test_path)
-fixed_test_df = fix_datas(test_df)
-Survived = predict(fixed_train_df, fixed_test_df)
-result_path = '../data/titanic/gender_submission.csv'
-result_df = load_df(result_path)
-PassengerId = [id for id in result_df.PassengerId]
-submission_path = '../data/titanic/submission.csv'
-submission_df = pd.DataFrame({'PassengerId': PassengerId, 'Survived': Survived})
-submission_df.to_csv(submission_path, index=False, sep=',')
+# skb = SelectKBest(k=20)
+# abc = AdaBoostClassifier(base_estimator=DecisionTreeClassifier(random_state=1), random_state=1, learning_rate=1.5, n_estimators=90)
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, abc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
+
+# {'classify__C': 0.1, 'classify__degree': 3, 'select__k': 7} 0.842453759157
+# pipe = Pipeline([('select', SelectKBest()), ('classify', SVC(random_state=1))])
+# param_search = {'select__k':list(range(3, 24, 2)), 'classify__C':[0.1, 1.0, 10], 'classify__degree':list(range(3, 10, 1))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
+
+# skb = SelectKBest(k=7)
+# svc = SVC(random_state=1, C=0.1, degree=3)
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, svc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
+
+# {'classify__n_neighbors': 18, 'classify__weights': 'uniform', 'select__k': 21} 0.874060025443
+# pipe = Pipeline([('select', SelectKBest()), ('classify', KNeighborsClassifier())])
+# param_search = {'select__k':list(range(3, 24, 2)), 'classify__n_neighbors':list(range(1, 30, 1)), 'classify__weights':['uniform', 'distance']}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
+
+# skb = SelectKBest(k=21)
+# svc = KNeighborsClassifier(weights='uniform', n_neighbors=18)
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, svc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
+
+
+# {'classify__base_estimator': DecisionTreeClassifier(class_weight=None, criterion='gini', max_depth=5,
+#             max_features=None, max_leaf_nodes=None,
+#             min_impurity_decrease=0.0, min_impurity_split=None,
+#             min_samples_leaf=2, min_samples_split=2,
+#             min_weight_fraction_leaf=0.0, presort=False, random_state=1,
+#             splitter='best'), 'classify__n_estimators': 3, 'select__k': 19} 0.883268764886
+base_estimator = [DecisionTreeClassifier(max_depth=5, min_samples_leaf=2, min_samples_split=2, random_state=1),
+                  RandomForestClassifier(max_depth=9, n_estimators=38),
+                  SVC(random_state=1, C=0.1, degree=3, probability=True),
+                  GradientBoostingClassifier(max_depth=3, n_estimators=50, learning_rate=0.1, random_state=1),
+                  KNeighborsClassifier(weights='uniform', n_neighbors=18)]
+# pipe = Pipeline([('select', SelectKBest()), ('classify', BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6))])
+# param_search = {'select__k':list(range(3, 24, 2)), 'classify__base_estimator':base_estimator, 'classify__n_estimators':list(range(3, 15, 2))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
+
+skb = SelectKBest(k=19)
+bc = BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, n_estimators=3, base_estimator=DecisionTreeClassifier(max_depth=5, min_samples_leaf=2, min_samples_split=2, random_state=1))
+from sklearn.pipeline import make_pipeline
+clf = make_pipeline(skb, bc)
+clf.fit(X=X_train, y=y_train)
+predicted_train = clf.predict(X_train)
 from sklearn.metrics import accuracy_score
+print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
 
-print(accuracy_score([survived for survived in result_df.Survived], Survived))
+
+# {'select__k': 21} 0.877402843825
+# estimators = [('dt', DecisionTreeClassifier(max_depth=5, min_samples_leaf=2, min_samples_split=2, random_state=1)),
+#               ('rfc', RandomForestClassifier(max_depth=9, n_estimators=38)),
+#               ('svc', SVC(random_state=1, C=0.1, degree=3, probability=True)),
+#               ('gbc', GradientBoostingClassifier(max_depth=3, n_estimators=50, learning_rate=0.1, random_state=1)),
+#               ('knn', KNeighborsClassifier(weights='uniform', n_neighbors=18))]
+# pipe = Pipeline([('select', SelectKBest()), ('classify', VotingClassifier(estimators=estimators, voting='soft'))])
+# param_search = {'select__k':list(range(3, 24, 2))}
+# from sklearn.model_selection import GridSearchCV
+# gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
+# gsearch.fit(X_train, y_train)
+# print(gsearch.best_params_, gsearch.best_score_)
+
+# skb = SelectKBest(k=21)
+# vc = VotingClassifier(estimators=estimators, voting='soft')
+# from sklearn.pipeline import make_pipeline
+# clf = make_pipeline(skb, vc)
+# clf.fit(X=X_train, y=y_train)
+# predicted_train = clf.predict(X_train)
+# from sklearn.metrics import accuracy_score
+# print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
+
+
+from sklearn.model_selection import cross_val_score
+cv_score = cross_val_score(clf, X_train, y_train, cv=10)
+print('cv_score.mean: %f, cv_score.std: %f' % (cv_score.mean(), cv_score.std()))
+
+predicted = clf.predict(X_test)
+submission_path = '../data/titanic/submission.csv'
+submission_df = pd.DataFrame({'PassengerId': PassengerId, 'Survived': predicted.astype(np.int32)})
+submission_df.to_csv(submission_path, index=False, sep=',')
+
+# print(df_train_copy[df_train_copy['Survived'] != predicted_train])
