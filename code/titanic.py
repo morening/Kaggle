@@ -152,27 +152,54 @@ def get_age_type(age):
         return 'old'
 df_all['AgeType'] = df_all['Age'].apply(get_age_type)
 
-# df_all['Surname'] = df_all['Name'].apply(lambda name:name.split(',')[0].strip())
-# surname_group_counts = df_all['Surname'].value_counts()
-# df_all['SurnameGroupSize'] = df_all['Surname'].apply(lambda surname:surname_group_counts[surname])
-# sns.barplot(x='SurnameGroupSize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+
+mother_list = list()
+for index in range(df_all.shape[0]):
+    if df_all.loc[index, 'Title'] == 'Mrs' and df_all.loc[index, 'Parch'] > 0:
+        mother_list.append(1)
+    else:
+        mother_list.append(0)
+
+df_all['Mother'] = pd.DataFrame(mother_list)
+
+
+df_all['Surname'] = df_all['Name'].apply(lambda name:name.split(',')[0].strip())
+surname_counts = df_all['Surname'][df_all['Survived'].notnull()].value_counts()
+surname_survived_dict = dict()
+for surname in surname_counts.keys():
+    surname_survived_dict[surname] = df_all[df_all['Surname'] == surname][df_all['Survived'].notnull()]['Survived'].sum() / surname_counts[surname]
+# print(surname_survived_dict)
+# print(sorted(surname_survived_dict.items(), key=lambda item: item[1]))
+def get_surname_survived_type(surname):
+    if surname not in surname_survived_dict:
+        return 'unknown'
+    elif surname_survived_dict[surname] > 0.5:
+        return 'high'
+    else:
+        return 'low'
+df_all['Surname_Survived'] = df_all['Surname'].apply(get_surname_survived_type)
+# print(df_all['Surname_Survived'])
+# sns.barplot(x='Surname', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
-# surname group size不同，生存率也不同
+# 不同家族，生存率也不同
 
-
+import numpy as np
 features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'FamiliyType', 'Deck',
-            'TicketGroupType']
+            'TicketGroupType', 'Surname_Survived']
 df_train = df_all[features][df_all['Survived'].notnull()]
 df_test = df_all[features][df_all['Survived'].isnull()].drop('Survived', axis=1)
 df_train = pd.get_dummies(df_train)
+df_train.insert(35, 'Surname_Survived_unknown', pd.DataFrame([np.nan]))
+df_train['Surname_Survived_unknown'].fillna(0, inplace=True)
 df_test = pd.get_dummies(df_test)
-import numpy as np
 df_test.insert(27, 'Deck_T', pd.DataFrame([np.nan]))
 df_test['Deck_T'].fillna(0, inplace=True)
 X_train = df_train.as_matrix()[:, 1:]
 y_train = df_train.as_matrix()[:, 0]
 X_test = df_test.as_matrix()
 # print(X_train.shape, y_train.shape, X_test.shape)
+# print(df_train.head())
+# print(df_test.head())
 
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectKBest
@@ -294,26 +321,26 @@ from sklearn.neighbors import KNeighborsClassifier
 # print('accuracy_score: %f' % accuracy_score(y_train, predicted_train))
 
 
-# {'classify__base_estimator': DecisionTreeClassifier(class_weight=None, criterion='gini', max_depth=5,
+# {'classify__base_estimator': DecisionTreeClassifier(class_weight=None, criterion='gini', max_depth=None,
 #             max_features=None, max_leaf_nodes=None,
 #             min_impurity_decrease=0.0, min_impurity_split=None,
-#             min_samples_leaf=2, min_samples_split=2,
+#             min_samples_leaf=1, min_samples_split=2,
 #             min_weight_fraction_leaf=0.0, presort=False, random_state=1,
-#             splitter='best'), 'classify__n_estimators': 3, 'select__k': 19} 0.883268764886
-base_estimator = [DecisionTreeClassifier(max_depth=5, min_samples_leaf=2, min_samples_split=2, random_state=1),
-                  RandomForestClassifier(max_depth=9, n_estimators=38),
-                  SVC(random_state=1, C=0.1, degree=3, probability=True),
-                  GradientBoostingClassifier(max_depth=3, n_estimators=50, learning_rate=0.1, random_state=1),
-                  KNeighborsClassifier(weights='uniform', n_neighbors=18)]
+#             splitter='best'), 'classify__n_estimators': 13, 'select__k': 27} 0.985236103533
+base_estimator = [DecisionTreeClassifier(random_state=1),
+                  RandomForestClassifier(random_state=1),
+                  SVC(random_state=1, probability=True),
+                  GradientBoostingClassifier(random_state=1),
+                  KNeighborsClassifier()]
 # pipe = Pipeline([('select', SelectKBest()), ('classify', BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6))])
-# param_search = {'select__k':list(range(3, 24, 2)), 'classify__base_estimator':base_estimator, 'classify__n_estimators':list(range(3, 15, 2))}
+# param_search = {'select__k':list(range(3, 35, 2)), 'classify__base_estimator':base_estimator, 'classify__n_estimators':list(range(3, 15, 2))}
 # from sklearn.model_selection import GridSearchCV
 # gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
 # gsearch.fit(X_train, y_train)
 # print(gsearch.best_params_, gsearch.best_score_)
 
-skb = SelectKBest(k=19)
-bc = BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, n_estimators=3, base_estimator=DecisionTreeClassifier(max_depth=5, min_samples_leaf=2, min_samples_split=2, random_state=1))
+skb = SelectKBest(k=27)
+bc = BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, n_estimators=13, base_estimator=DecisionTreeClassifier(random_state=1))
 from sklearn.pipeline import make_pipeline
 clf = make_pipeline(skb, bc)
 clf.fit(X=X_train, y=y_train)
@@ -355,3 +382,10 @@ submission_df = pd.DataFrame({'PassengerId': PassengerId, 'Survived': predicted.
 submission_df.to_csv(submission_path, index=False, sep=',')
 
 # print(df_train_copy[df_train_copy['Survived'] != predicted_train])
+
+from sklearn.model_selection import learning_curve
+train_sizes, train_scores, test_scores = learning_curve(estimator=clf, X=X_train, y=y_train, train_sizes=np.linspace(0.1, 1.0, 100), cv=10, n_jobs=-1)
+plt.plot(train_sizes, train_scores.mean(axis=1), label='train_scores')
+plt.plot(train_sizes, test_scores.mean(axis=1), label='test_scores')
+plt.legend()
+plt.show()
