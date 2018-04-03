@@ -26,26 +26,26 @@ import matplotlib.pyplot as plt
 # sns.barplot(x='SibSp', y='Survived', data=df_train, palette='Set3')
 # plt.show()
 # 兄弟姐妹数量适中生存率较高 1&2 > 0&3&4 > 5&8
-def get_sibsp_type(num):
-    if num == 1 or num == 2:
-        return 'high'
-    elif num == 0 or num == 3 or num == 4:
-        return 'mid'
-    else:
-        return 'low'
-df_all['SibSpType'] = df_all['SibSp'].apply(get_sibsp_type)
+# def get_sibsp_type(num):
+#     if num == 1 or num == 2:
+#         return 'high'
+#     elif num == 0 or num == 3 or num == 4:
+#         return 'mid'
+#     else:
+#         return 'low'
+# df_all['SibSpType'] = df_all['SibSp'].apply(get_sibsp_type)
 
 # sns.barplot(x='Parch', y='Survived', data=df_train, palette='Set3')
 # plt.show()
 # 父母与子女数量适中生存率较高 1&2&3 > 0&5 > 4&6
-def get_parch_type(num):
-    if num >= 1 and num <= 3:
-        return 'high'
-    elif num == 0 or num == 5:
-        return 'mid'
-    else:
-        return 'low'
-df_all['ParchType'] = df_all['Parch'].apply(get_parch_type)
+# def get_parch_type(num):
+#     if num >= 1 and num <= 3:
+#         return 'high'
+#     elif num == 0 or num == 5:
+#         return 'mid'
+#     else:
+#         return 'low'
+# df_all['ParchType'] = df_all['Parch'].apply(get_parch_type)
 
 # facet = sns.FacetGrid(df_train, hue='Survived', aspect=2)
 # facet.map(sns.kdeplot, 'Age', shade=True)
@@ -81,18 +81,18 @@ df_all['Title'] = df_all['Title'].map(Title_Dict)
 # plt.show()
 # 不同的称谓也会影响生存率
 
-df_all['FamiliySize'] = df_all['SibSp'] + df_all['Parch'] + 1
-# sns.barplot(x='FamiliySize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+df_all['FamilySize'] = df_all['SibSp'] + df_all['Parch']
+# sns.barplot(x='FamilySize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
-# 家庭规模适中生存率大于其他 2&3&4 > 1&5&6&7 > 8&11
+# 家庭规模适中生存率大于其他 1&2&3 > 0&4&5&6 > 7&10
 def get_family_type(num):
-    if num >= 2 and num <= 4:
-        return 'high'
-    elif num == 1 or (num >= 5 and num <= 7):
+    if num >= 1 and num <= 3:
+        return 'large'
+    elif num == 0 or (num >= 4 and num <= 6):
         return 'mid'
     else:
-        return 'low'
-df_all['FamiliyType'] = df_all['FamiliySize'].apply(get_family_type)
+        return 'small'
+df_all['FamilyType'] = df_all['FamilySize'].apply(get_family_type)
 
 def get_deck(cabin):
     return str(cabin)[0]
@@ -110,11 +110,11 @@ df_all['TicketGroupSize'] = df_all['Ticket'].apply(lambda ticket: ticket_group_c
 # 适中的同号船票数量生存率比其他高 2&3&4 > 1&7 > 5&6
 def get_ticket_group_type(num):
     if num >=2 and num <= 4:
-        return 'high'
+        return 'large'
     elif num == 1 or num == 7:
         return 'mid'
     else:
-        return 'low'
+        return 'small'
 df_all['TicketGroupType'] = df_all['TicketGroupSize'].apply(get_ticket_group_type)
 
 
@@ -144,23 +144,15 @@ rfr.fit(X=known_age[:, 1:], y=known_age[:, 0])
 predicted_age = rfr.predict(unknown_age[:, 1:])
 df_all.loc[(df_all['Age'].isnull()), 'Age'] = predicted_age
 def get_age_type(age):
-    if age <= 15:
+    if age <= 14:
         return 'child'
-    elif age <= 50:
-        return 'adult'
+    elif age <= 35:
+        return 'young'
+    elif age <= 60:
+        return 'midlife'
     else:
-        return 'old'
+        return 'aged'
 df_all['AgeType'] = df_all['Age'].apply(get_age_type)
-
-
-mother_list = list()
-for index in range(df_all.shape[0]):
-    if df_all.loc[index, 'Title'] == 'Mrs' and df_all.loc[index, 'Parch'] > 0:
-        mother_list.append(1)
-    else:
-        mother_list.append(0)
-
-df_all['Mother'] = pd.DataFrame(mother_list)
 
 
 df_all['Surname'] = df_all['Name'].apply(lambda name:name.split(',')[0].strip())
@@ -168,8 +160,6 @@ surname_counts = df_all['Surname'][df_all['Survived'].notnull()].value_counts()
 surname_survived_dict = dict()
 for surname in surname_counts.keys():
     surname_survived_dict[surname] = df_all[df_all['Surname'] == surname][df_all['Survived'].notnull()]['Survived'].sum() / surname_counts[surname]
-# print(surname_survived_dict)
-# print(sorted(surname_survived_dict.items(), key=lambda item: item[1]))
 def get_surname_survived_type(surname):
     if surname not in surname_survived_dict:
         return 'unknown'
@@ -183,23 +173,65 @@ df_all['Surname_Survived'] = df_all['Surname'].apply(get_surname_survived_type)
 # plt.show()
 # 不同家族，生存率也不同
 
+
+roll_list = list()
+for index in range(df_all.shape[0]):
+    if df_all.loc[index, 'AgeType'] == 'child':
+        roll_list.append('child')
+    elif df_all.loc[index, 'AgeType'] == 'aged':
+        roll_list.append('grandparent')
+    else:
+        if df_all.loc[index, 'Parch'] > 0:
+            if df_all.loc[index, 'Sex'] == 'male':
+                roll_list.append('father')
+            else:
+                roll_list.append('mother')
+        else:
+            if df_all.loc[index, 'SibSp'] == 0:
+                roll_list.append('single')
+            else:
+                if df_all.loc[index, 'Sex'] == 'male':
+                    roll_list.append('husband')
+                else:
+                    roll_list.append('wife')
+df_all['Roll'] = pd.DataFrame(roll_list)
+# sns.barplot(x='Roll', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+
+
+def check_mate(size):
+    if size > 1:
+        return 1
+    else:
+        return 0
+df_all['Mate'] = df_all['TicketGroupSize'].apply(check_mate)
+# sns.barplot(x='Mate', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+
+def check_alone(size):
+    if size > 0:
+        return 0
+    else:
+        return 1
+df_all['Alone'] = df_all['FamilySize'].apply(check_alone)
+# sns.barplot(x='Alone', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
+# plt.show()
+
+
+# print(df_all.keys())
+
+
 import numpy as np
-features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'FamiliyType', 'Deck',
-            'TicketGroupType', 'Surname_Survived']
-df_train = df_all[features][df_all['Survived'].notnull()]
-df_test = df_all[features][df_all['Survived'].isnull()].drop('Survived', axis=1)
-df_train = pd.get_dummies(df_train)
-df_train.insert(35, 'Surname_Survived_unknown', pd.DataFrame([np.nan]))
-df_train['Surname_Survived_unknown'].fillna(0, inplace=True)
-df_test = pd.get_dummies(df_test)
-df_test.insert(27, 'Deck_T', pd.DataFrame([np.nan]))
-df_test['Deck_T'].fillna(0, inplace=True)
+features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'FamilyType', 'Deck',
+            'Roll', 'Mate', 'Alone']
+df_all_dummies = pd.get_dummies(df_all[features])
+df_train = df_all_dummies[df_all_dummies['Survived'].notnull()]
+df_test = df_all_dummies[df_all_dummies['Survived'].isnull()].drop('Survived', axis=1)
 X_train = df_train.as_matrix()[:, 1:]
 y_train = df_train.as_matrix()[:, 0]
 X_test = df_test.as_matrix()
-# print(X_train.shape, y_train.shape, X_test.shape)
-# print(df_train.head())
-# print(df_test.head())
+print(X_train.shape, y_train.shape, X_test.shape)
+
 
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectKBest
@@ -333,14 +365,16 @@ base_estimator = [DecisionTreeClassifier(random_state=1),
                   GradientBoostingClassifier(random_state=1),
                   KNeighborsClassifier()]
 # pipe = Pipeline([('select', SelectKBest()), ('classify', BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6))])
-# param_search = {'select__k':list(range(3, 35, 2)), 'classify__base_estimator':base_estimator, 'classify__n_estimators':list(range(3, 15, 2))}
+# param_search = {'select__k':list(range(3, 39, 2)), 'classify__base_estimator':base_estimator, 'classify__n_estimators':list(range(3, 15, 2))}
 # from sklearn.model_selection import GridSearchCV
 # gsearch = GridSearchCV(estimator=pipe, param_grid=param_search, scoring='roc_auc', cv=10, n_jobs=-1)
 # gsearch.fit(X_train, y_train)
 # print(gsearch.best_params_, gsearch.best_score_)
 
-skb = SelectKBest(k=27)
-bc = BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, n_estimators=13, base_estimator=DecisionTreeClassifier(random_state=1))
+# skb = SelectKBest(k=gsearch.best_params_['select__k'])
+# bc = BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, n_estimators=gsearch.best_params_['classify__n_estimators'], base_estimator=gsearch.best_params_['classify__base_estimator'])
+skb = SelectKBest(k=37)
+bc = BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, n_estimators=9, base_estimator=GradientBoostingClassifier(random_state=1))
 from sklearn.pipeline import make_pipeline
 clf = make_pipeline(skb, bc)
 clf.fit(X=X_train, y=y_train)
@@ -377,15 +411,23 @@ cv_score = cross_val_score(clf, X_train, y_train, cv=10)
 print('cv_score.mean: %f, cv_score.std: %f' % (cv_score.mean(), cv_score.std()))
 
 predicted = clf.predict(X_test)
+
+# predicted_df = df_all[df_all['Survived'].isnull()]
+# predicted_df['Survived'] = predicted
+# for surname in surname_survived_dict.keys():
+#     if surname_survived_dict[surname] == 1.0:
+#         predicted_df.loc[predicted_df['Surname'] == surname, 'Survived'] = 1
+# predicted = predicted_df['Survived'].as_matrix()
+
 submission_path = '../data/titanic/submission.csv'
 submission_df = pd.DataFrame({'PassengerId': PassengerId, 'Survived': predicted.astype(np.int32)})
 submission_df.to_csv(submission_path, index=False, sep=',')
 
 # print(df_train_copy[df_train_copy['Survived'] != predicted_train])
 
-from sklearn.model_selection import learning_curve
-train_sizes, train_scores, test_scores = learning_curve(estimator=clf, X=X_train, y=y_train, train_sizes=np.linspace(0.1, 1.0, 100), cv=10, n_jobs=-1)
-plt.plot(train_sizes, train_scores.mean(axis=1), label='train_scores')
-plt.plot(train_sizes, test_scores.mean(axis=1), label='test_scores')
-plt.legend()
-plt.show()
+# from sklearn.model_selection import learning_curve
+# train_sizes, train_scores, test_scores = learning_curve(estimator=clf, X=X_train, y=y_train, train_sizes=np.linspace(0.1, 1.0, 100), cv=10, n_jobs=-1)
+# plt.plot(train_sizes, train_scores.mean(axis=1), label='train_scores')
+# plt.plot(train_sizes, test_scores.mean(axis=1), label='test_scores')
+# plt.legend()
+# plt.show()
