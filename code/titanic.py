@@ -10,6 +10,7 @@ df_test = pd.read_csv(path_test)
 PassengerId = [id for id in df_test.PassengerId]
 df_all = pd.concat([df_train, df_test], ignore_index=True)
 df_train_copy = df_train.copy()
+print('load data done!')
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -50,6 +51,8 @@ import matplotlib.pyplot as plt
 # plt.show()
 # 登船城市C的生存率大于其他
 
+from sklearn.preprocessing import LabelEncoder
+le = LabelEncoder()
 df_all['Title'] = df_all['Name'].apply(lambda name: name.split(', ')[1].split('. ')[0])
 Title_Dict = {}
 Title_Dict.update(dict.fromkeys(['Capt', 'Col', 'Major', 'Dr', 'Rev'], 'Officer'))
@@ -59,24 +62,20 @@ Title_Dict.update(dict.fromkeys(['Mlle', 'Miss'], 'Miss'))
 Title_Dict.update(dict.fromkeys(['Mr'], 'Mr'))
 Title_Dict.update(dict.fromkeys(['Master', 'Jonkheer'], 'Master'))
 df_all['Title'] = df_all['Title'].map(Title_Dict)
+df_all['Title'] = le.fit_transform(df_all['Title'])
 # sns.barplot(x='Title', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
 # 不同的称谓也会影响生存率
 
-df_all['FamiliySize'] = df_all['SibSp'] + df_all['Parch'] + 1
+df_all['FamiliySize'] = df_all['SibSp'] + df_all['Parch']
 # sns.barplot(x='FamiliySize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
-def get_family_type(num):
-    if num >= 2 and num <= 4:
-        return 'high'
-    elif num == 1 or (num >= 5 and num <= 7):
-        return 'mid'
-    else:
-        return 'low'
-df_all['FamiliyType'] = df_all['FamiliySize'].apply(get_family_type)
+df_all['IsAlone'] = 1
+df_all.loc[df_all['FamiliySize']>0, 'IsAlone'] = 0
 
 df_all['Cabin'].fillna('U', inplace=True)
 df_all['Deck'] = df_all['Cabin'].apply(lambda cabin: str(cabin)[0])
+df_all['Deck'] = le.fit_transform(df_all['Deck'])
 # sns.barplot(x='Deck', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
 # 船舱所在位置对生存率影响较大
@@ -85,51 +84,56 @@ ticket_group_counts = df_all['Ticket'].value_counts()
 df_all['TicketGroupSize'] = df_all['Ticket'].apply(lambda ticket: ticket_group_counts[ticket])
 # sns.barplot(x='TicketGroupSize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
+df_all['HasMate'] = 1
+df_all.loc[df_all['TicketGroupSize'] == 0, 'HasMate'] = 0
 
-def get_ticket_group_type(num):
-    if num >=2 and num <= 4:
-        return 'high'
-    elif num == 1 or num == 7:
-        return 'mid'
-    else:
-        return 'low'
-df_all['TicketGroupType'] = df_all['TicketGroupSize'].apply(get_ticket_group_type)
-
-
-
-# print(df_train[df_train['Embarked'] == 'C'][df_train['Pclass'] == 1].median())
-# print(df_train[df_train['Embarked'].isnull()])
-# Embarked 缺失的数据更接近于C
 df_all['Embarked'].fillna('C', inplace=True)
-# print(df_all[df_all['Embarked'] == 'S'][df_all['Pclass'] == 3].median())
-# print(df_all[df_all['Fare'].isnull()])
-df_all['Fare'].fillna(8.05, inplace=True)
-df_all['FareType'] = df_all['Fare'].apply(lambda fare: 'low' if fare <= 18 else 'high')
+df_all['Embarked'] = le.fit_transform(df_all['Embarked'])
 
-features_age = ['Age', 'Pclass', 'Sex', 'Title']
-df_age = df_all[features_age]
-df_age = pd.get_dummies(df_age)
-known_age = df_age[df_age['Age'].notnull()].as_matrix()
-unknown_age = df_age[df_age['Age'].isnull()].as_matrix()
-from sklearn.ensemble import RandomForestRegressor
-rfr = RandomForestRegressor(random_state=0, n_estimators=100)
-rfr.fit(X=known_age[:, 1:], y=known_age[:, 0])
-predicted_age = rfr.predict(unknown_age[:, 1:])
-df_all.loc[(df_all['Age'].isnull()), 'Age'] = predicted_age
-def get_age_type(age):
-    if age <= 15:
-        return 'child'
-    elif age <= 50:
-        return 'adult'
+df_all['Fare'].fillna(8.05, inplace=True)
+df_all['FareType'] = pd.qcut(df_all['Fare'], 6, labels=range(0, 6, 1))
+df_all['FareType'] = le.fit_transform(df_all['FareType'])
+
+title_value_counts = df_all['Title'].value_counts()
+mean_age_dict = dict()
+for title in title_value_counts.keys():
+    mean_age_dict[title] = df_all['Age'][df_all['Age'].notnull()][df_all['Title'] == title].mean()
+df_all.loc[df_all['Age'].isnull(), 'Age'] = df_all[df_all['Age'].isnull()]['Title'].apply(lambda title: mean_age_dict[title])
+df_all['AgeType'] = pd.qcut(df_all['Age'], 4, labels=['child', 'young', 'midlife', 'aged'])
+df_all['AgeType'] = le.fit_transform(df_all['AgeType'])
+
+roll_list = list()
+for index in range(df_all.shape[0]):
+    if df_all.loc[index, 'AgeType'] == 'child':
+        roll_list.append('child')
+    elif df_all.loc[index, 'AgeType'] == 'aged':
+        roll_list.append('grandparent')
     else:
-        return 'old'
-df_all['AgeType'] = df_all['Age'].apply(get_age_type)
+        if df_all.loc[index, 'Parch'] > 0:
+            if df_all.loc[index, 'Sex'] == 'male':
+                roll_list.append('father')
+            else:
+                roll_list.append('mother')
+        else:
+            if df_all.loc[index, 'SibSp'] == 0:
+                roll_list.append('single')
+            else:
+                if df_all.loc[index, 'Sex'] == 'male':
+                    roll_list.append('husband')
+                else:
+                    roll_list.append('wife')
+df_all['Roll'] = pd.DataFrame(roll_list)
+df_all['Roll'] = le.fit_transform(df_all['Roll'])
+
+df_all['Sex'] = le.fit_transform(df_all['Sex'])
 
 df_all['Surname'] = df_all['Name'].apply(lambda name:name.split(',')[0].strip())
+df_all['Surname'] = le.fit_transform(df_all['Surname'])
+print('F E done!')
 
 import numpy as np
-features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'FamiliyType', 'Deck',
-            'TicketGroupType']
+features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'Deck',
+            'Roll', 'HasMate', 'IsAlone']
 df_all_dummies = pd.get_dummies(df_all[features])
 df_train = df_all_dummies[df_all_dummies['Survived'].notnull()]
 df_test = df_all_dummies[df_all_dummies['Survived'].isnull()].drop('Survived', axis=1)
@@ -137,6 +141,8 @@ X_train = df_train.as_matrix()[:, 1:]
 y_train = df_train.as_matrix()[:, 0]
 X_test = df_test.as_matrix()
 # print(X_train.shape, y_train.shape, X_test.shape)
+# sns.heatmap(df_all_dummies[df_all_dummies['Survived'].notnull()].corr(), annot=True, square=True)
+# plt.show()
 
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
@@ -146,7 +152,7 @@ def build_model(model, search_params, with_select=True):
     if with_select:
         pipe = Pipeline([('select', SelectKBest()), ('classify', model)])
         if 'select__k' not in search_params:
-            search_params['select__k'] = range(2, 32, 1)
+            search_params['select__k'] = range(2, 10, 1)
     else:
         pipe = Pipeline([('classify', model)])
     gsearch = GridSearchCV(estimator=pipe, param_grid=search_params, scoring='roc_auc', cv=10, n_jobs=-1)
@@ -154,7 +160,8 @@ def build_model(model, search_params, with_select=True):
     clf = gsearch.best_estimator_
     clf.fit(X=X_train, y=y_train)
     predicted_train = clf.predict(X_train)
-    print('%s accuracy_score: %f using %s' % (str(model).split('(')[0], accuracy_score(y_train, predicted_train), gsearch.best_estimator_))
+    score = accuracy_score(y_train, predicted_train)
+    print('%s accuracy_score: %f using %s' % (str(model).split('(')[0], score, gsearch.best_params_))
     return clf
 
 from sklearn.linear_model import LogisticRegression
@@ -165,35 +172,52 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import AdaBoostClassifier
-from sklearn.ensemble import VotingClassifier
 from xgboost import XGBClassifier
 from sklearn.ensemble import BaggingClassifier
 
 # lr = build_model(LogisticRegression(random_state=1, n_jobs=-1), {'classify__C':np.logspace(-1, 1, num=3)})
-# rfc = build_model(RandomForestClassifier(random_state=1, max_features='sqrt', n_jobs=-1), {'classify__max_depth':range(3, 15, 3)})
-# gbc = build_model(GradientBoostingClassifier(random_state=1), {'classify__learning_rate':np.logspace(-2, 0, num=3), 'classify__n_estimators':range(50, 150, 20), 'classify__subsample':np.arange(0.5, 1.0, 0.1), 'classify__max_depth':range(3, 15, 3)})
-# dtc = build_model(DecisionTreeClassifier(random_state=1), {'classify__max_depth':range(2, 10, 2), 'classify__min_samples_split':range(2, 10, 2), 'classify__min_samples_leaf':range(1, 5, 2)})
+# rfc = build_model(RandomForestClassifier(random_state=1, max_features='sqrt', n_jobs=-1), {'classify__min_samples_leaf':range(1, 5, 1), 'classify__min_samples_split':range(2, 5, 1), 'classify__n_estimators':range(5, 15, 1), 'classify__max_depth':range(3, 15, 3)})
+# gbc = build_model(GradientBoostingClassifier(random_state=1), {'classify__min_samples_leaf':range(1, 5, 1), 'classify__min_samples_split':range(2, 5, 1), 'classify__learning_rate':np.logspace(-2, 0, num=3), 'classify__n_estimators':range(50, 150, 20), 'classify__subsample':np.arange(0.5, 1.0, 0.1), 'classify__max_depth':range(3, 15, 3)})
+# dtc = build_model(DecisionTreeClassifier(random_state=1), {'classify__max_depth':range(2, 7, 1), 'classify__min_samples_split':range(2, 5, 1), 'classify__min_samples_leaf':range(1, 5, 1)})
 # svc = build_model(SVC(random_state=1, probability=True), {'classify__C':np.logspace(-1, 1, 3), 'classify__degree':list(range(3, 9, 2))})
-# knn = build_model(KNeighborsClassifier(n_jobs=-1), {'classify__n_neighbors':range(5, 30, 5)})
+# knn = build_model(KNeighborsClassifier(n_jobs=-1), {'classify__n_neighbors':range(5, 10, 1)})
 # gnb = build_model(GaussianNB(), {})
-# ada = build_model(AdaBoostClassifier(base_estimator=DecisionTreeClassifier(random_state=1), random_state=1), {'classify__learning_rate':np.logspace(-1, 1, 3)})
-# xg = build_model(XGBClassifier(n_jobs=-1, random_state=1), {'classify__max_depth':range(3, 15, 3), 'classify__learning_rate':np.logspace(-2, 0, 3), 'classify__n_estimators':range(50, 150, 50)})
-bag = build_model(BaggingClassifier(random_state=1, max_samples=0.6, max_features=0.6, base_estimator=DecisionTreeClassifier(random_state=1, max_depth=5, min_samples_leaf=2, min_samples_split=2)), {'select__k':[19], 'classify__n_estimators':[13]})
+# ada = build_model(AdaBoostClassifier(base_estimator=DecisionTreeClassifier(random_state=1), random_state=1), {'classify__n_estimators':range(30, 70, 10), 'classify__learning_rate':np.logspace(-1, 1, 3)})
+# xg = build_model(XGBClassifier(n_jobs=-1, random_state=1), {'classify__max_depth':range(3, 15, 3), 'classify__learning_rate':np.logspace(-2, 0, 3), 'classify__n_estimators':range(80, 120, 10)})
+# bag = build_model(BaggingClassifier(random_state=1, base_estimator=DecisionTreeClassifier(random_state=1)), {'classify__max_features':np.arange(0.5, 1.0, 0.1), 'classify__max_samples':np.arange(0.5, 1.0, 0.1), 'classify__n_estimators':range(5, 15, 1)})
 
-clf = bag
-clf.fit(X=X_train, y=y_train)
-predicted = clf.predict(X_test)
+lr = build_model(LogisticRegression(random_state=1, n_jobs=-1), {'select__k':[9], 'classify__C':[10]})
+rfc = build_model(RandomForestClassifier(random_state=1, max_features='sqrt', n_jobs=-1), {'select__k':[9], 'classify__min_samples_leaf':[1], 'classify__min_samples_split':[4], 'classify__n_estimators':[11], 'classify__max_depth':[6]})
+gbc = build_model(GradientBoostingClassifier(random_state=1), {'select__k':[8], 'classify__min_samples_leaf':[4], 'classify__min_samples_split':[2], 'classify__learning_rate':[0.1], 'classify__n_estimators':[50], 'classify__subsample':[0.9], 'classify__max_depth':[3]})
+dtc = build_model(DecisionTreeClassifier(random_state=1), {'select__k':[8], 'classify__max_depth':[5], 'classify__min_samples_split':[2], 'classify__min_samples_leaf':[2]})
+svc = build_model(SVC(random_state=1, probability=True), {'select__k':[9], 'classify__C':[1.0], 'classify__degree':[3]})
+knn = build_model(KNeighborsClassifier(n_jobs=-1), {'select__k':[8], 'classify__n_neighbors':[8]})
+gnb = build_model(GaussianNB(), {'select__k':[2]})
+ada = build_model(AdaBoostClassifier(base_estimator=DecisionTreeClassifier(random_state=1), random_state=1), {'select__k':[3], 'classify__n_estimators':[50], 'classify__learning_rate':[1.0]})
+xg = build_model(XGBClassifier(n_jobs=-1, random_state=1), {'select__k':[8], 'classify__max_depth':[3], 'classify__learning_rate':[0.1], 'classify__n_estimators':[110]})
+bag = build_model(BaggingClassifier(random_state=1, base_estimator=DecisionTreeClassifier(random_state=1), n_jobs=-1), {'select__k':[9], 'classify__max_features':[0.7], 'classify__max_samples':[0.7], 'classify__n_estimators':[14]})
+
+print('build model done!')
+
+predicted_list = list()
+estimator_list = [lr, rfc, gbc, dtc, svc, knn, gnb, ada, xg, bag]
+for estimator in estimator_list:
+    estimator.fit(X_train, y_train)
+    predicted_list.append(estimator.predict(X_test))
+predicted_array = np.array(predicted_list).transpose()
+predicted_mean = predicted_array.mean(axis=1)
+predicted = list()
+for num in predicted_mean:
+    if num > 0.5:
+        predicted.append(1)
+    else:
+        predicted.append(0)
+predicted = np.array(predicted)
 submission_path = '../data/titanic/submission.csv'
 submission_df = pd.DataFrame({'PassengerId': PassengerId, 'Survived': predicted.astype(np.int32)})
 submission_df.to_csv(submission_path, index=False, sep=',')
+print('predict test done!')
 
-from sklearn.model_selection import cross_val_score
-cv_score = cross_val_score(clf, X_train, y_train, cv=10)
-print('cv_score.mean: %f, cv_score.std: %f' % (cv_score.mean(), cv_score.std()))
-
-from sklearn.model_selection import learning_curve
-train_sizes, train_scores, test_scores = learning_curve(estimator=bag, X=X_train, y=y_train, train_sizes=np.linspace(0.1, 1.0, 100), cv=10, n_jobs=-1)
-plt.plot(train_sizes, train_scores.mean(axis=1), label='train_scores')
-plt.plot(train_sizes, test_scores.mean(axis=1), label='test_scores')
-plt.legend()
-plt.show()
+df_all_path = '../data/titanic/df_all.csv'
+df_all.to_csv(df_all_path, index=False, sep=',')
+print('df_all write done!')
