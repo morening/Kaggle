@@ -199,25 +199,62 @@ bag = build_model(BaggingClassifier(random_state=1, base_estimator=DecisionTreeC
 
 print('build model done!')
 
-predicted_list = list()
-estimator_list = [lr, rfc, gbc, dtc, svc, knn, gnb, ada, xg, bag]
-for estimator in estimator_list:
-    estimator.fit(X_train, y_train)
-    predicted_list.append(estimator.predict(X_test))
-predicted_array = np.array(predicted_list).transpose()
-predicted_mean = predicted_array.mean(axis=1)
-predicted = list()
-for num in predicted_mean:
-    if num > 0.5:
-        predicted.append(1)
-    else:
-        predicted.append(0)
+# predicted_list = list()
+# estimator_list = [lr, rfc, gbc, dtc, svc, knn, gnb, ada, xg, bag]
+# for estimator in estimator_list:
+#     estimator.fit(X_train, y_train)
+#     predicted_list.append(estimator.predict(X_test))
+# predicted_array = np.array(predicted_list).transpose()
+# predicted_mean = predicted_array.mean(axis=1)
+# predicted = list()
+# for num in predicted_mean:
+#     if num > 0.5:
+#         predicted.append(1)
+#     else:
+#         predicted.append(0)
+
+from sklearn.model_selection import KFold
+def fit_predict_by_StackingEnsemble(X_train, y_train, X_test, input_models, output_model, n_splits=3, is_shuffle=False):
+    kf = KFold(n_splits=n_splits, shuffle=is_shuffle)
+    train_model_list = list()
+    test_model_list = list()
+    for model in input_models:
+        train_predict_all = list()
+        test_predict_list = list()
+        for tr_index, te_index in kf.split(X_train):
+            model.fit(X_train[tr_index], y_train[tr_index])
+            train_predict = model.predict(X_train[te_index])
+            train_predict_all += list(np.array(train_predict).transpose())
+            test_predict = model.predict(X_test)
+            test_predict_list.append(test_predict)
+
+        test_predict_mean = np.array(test_predict_list).mean(axis=0)
+        test_predict_all = list()
+        for mean in test_predict_mean:
+            if mean > 0.5:
+                test_predict_all.append(1)
+            else:
+                test_predict_all.append(0)
+
+        train_model_list.append(train_predict_all)
+        test_model_list.append(test_predict_all)
+
+    train_model_list = np.array(train_model_list).transpose()
+    test_model_list = np.array(test_model_list).transpose()
+    output_model.fit(train_model_list, y_train)
+    test_predict_final = output_model.predict(test_model_list)
+
+    return test_predict_final
+input_models = [rfc, svc, gbc, dtc, xg]
+output_model = AdaBoostClassifier()
+predicted = fit_predict_by_StackingEnsemble(X_train, y_train, X_test, input_models, output_model, n_splits=5)
+
 predicted = np.array(predicted)
 submission_path = '../data/titanic/submission.csv'
 submission_df = pd.DataFrame({'PassengerId': PassengerId, 'Survived': predicted.astype(np.int32)})
 submission_df.to_csv(submission_path, index=False, sep=',')
 print('predict test done!')
 
-df_all_path = '../data/titanic/df_all.csv'
-df_all.to_csv(df_all_path, index=False, sep=',')
-print('df_all write done!')
+# df_all_path = '../data/titanic/df_all.csv'
+# df_all.to_csv(df_all_path, index=False, sep=',')
+# print('df_all write done!')
