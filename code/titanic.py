@@ -85,7 +85,7 @@ df_all['TicketGroupSize'] = df_all['Ticket'].apply(lambda ticket: ticket_group_c
 # sns.barplot(x='TicketGroupSize', y='Survived', data=df_all[df_all['Survived'].notnull()], palette='Set3')
 # plt.show()
 df_all['HasMate'] = 1
-df_all.loc[df_all['TicketGroupSize'] == 0, 'HasMate'] = 0
+df_all.loc[df_all['TicketGroupSize'] == 1, 'HasMate'] = 0
 
 df_all['Embarked'].fillna('C', inplace=True)
 df_all['Embarked'] = le.fit_transform(df_all['Embarked'])
@@ -133,7 +133,7 @@ print('F E done!')
 
 import numpy as np
 features = ['Survived', 'Pclass', 'Sex', 'AgeType', 'FareType', 'Embarked', 'Title', 'Deck',
-            'Roll', 'HasMate', 'IsAlone']
+            'Roll', 'IsAlone']
 df_all_dummies = pd.get_dummies(df_all[features])
 df_train = df_all_dummies[df_all_dummies['Survived'].notnull()]
 df_test = df_all_dummies[df_all_dummies['Survived'].isnull()].drop('Survived', axis=1)
@@ -152,7 +152,7 @@ def build_model(model, search_params, with_select=True):
     if with_select:
         pipe = Pipeline([('select', SelectKBest()), ('classify', model)])
         if 'select__k' not in search_params:
-            search_params['select__k'] = range(2, 10, 1)
+            search_params['select__k'] = range(2, 9, 1)
     else:
         pipe = Pipeline([('classify', model)])
     gsearch = GridSearchCV(estimator=pipe, param_grid=search_params, scoring='roc_auc', cv=10, n_jobs=-1)
